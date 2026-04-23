@@ -1,0 +1,14 @@
+# Runtime, per-instance state — never committed to this repo.
+zeemap/data/*
+!zeemap/data/.gitkeep
+zeemap/references/*
+!zeemap/references/.gitkeep
+!zeemap/references/README.md
+zeemap/log.jsonl
+zeemap-audit/data/reports/*
+!zeemap-audit/data/reports/.gitkeep
+
+# Python junk
+__pycache__/
+*.pyc
+.pytest_cache/

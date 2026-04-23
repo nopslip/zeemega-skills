@@ -1,0 +1,15 @@
+{
+  "schema_path": "~/.hermes/skills/productivity/zeemap/schema/v1.json",
+  "data_dir": "~/.hermes/skills/productivity/zeemap/data/",
+  "log_path": "~/.hermes/skills/productivity/zeemap/log.jsonl",
+  "reports_dir": "~/.hermes/skills/productivity/zeemap-audit/data/reports/",
+  "deliver": "slack",
+  "severity": {
+    "parse_error": "critical",
+    "missing_required_field": "warn",
+    "malformed_created": "warn",
+    "unknown_field": "info",
+    "non_canonical_filename": "info"
+  },
+  "ignore_uuids": []
+}

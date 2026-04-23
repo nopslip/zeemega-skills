@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "required": [
+    "title",
+    "zone",
+    "tags",
+    "what",
+    "why",
+    "created",
+    "type",
+    "uuid",
+    "schema_version"
+  ],
+  "optional": [
+    "model",
+    "skill",
+    "skill_url",
+    "seeded_from",
+    "updated"
+  ],
+  "types": {
+    "title": "string",
+    "zone": "string",
+    "tags": "array<string>",
+    "what": "string",
+    "why": "string",
+    "created": "iso-timestamp",
+    "type": "string",
+    "uuid": "uuid-v4",
+    "schema_version": "integer",
+    "model": "string",
+    "skill": "string",
+    "skill_url": "string",
+    "seeded_from": "array<uuid-v4>",
+    "updated": "iso-timestamp"
+  },
+  "constraints": {
+    "title": "double-quote if contains colon-space (per SKILL.md v0.4.1)",
+    "what": "double-quote if contains colon-space",
+    "why": "double-quote if contains colon-space",
+    "schema_version": "must equal 1 for this schema; 0 = grandfathered"
+  }
+}
