@@ -13,8 +13,10 @@ Exit codes:
   3 — slug collision (caller should retry with disambiguator)
   4 — log/event append failed (zee itself persisted; audit will see it)
   5 — postgres mode requires CLERK_USER_ID env and it isn't set
-
-See zeemap-lifecycle-execution-plan.md §"Cron-output helper" for the contract.
+  6 — postgres required but unavailable (psycopg_pool missing and no
+      venv recoverable), OR DATABASE_URL set but ZEEMAP_STORE=local
+      (agent silent-fallback guard). Do NOT retry with
+      ZEEMAP_STORE=local — surface this error.
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ import argparse
 import datetime as dt
 import os
 import re
+import subprocess
 import sys
 import uuid as uuid_mod
 from pathlib import Path
@@ -90,6 +93,92 @@ def build_frontmatter(fields: dict) -> str:
 def build_filename(created_iso: str, title: str) -> str:
     ts = dt.datetime.fromisoformat(created_iso).strftime("%Y-%m-%d-%H%M")
     return f"{ts}-{_slugify(title)}.md"
+
+
+def _find_venv_python_with_psycopg_pool() -> str | None:
+    """Locate a python interpreter that has psycopg_pool available.
+
+    Order: $VIRTUAL_ENV, $HERMES_HOME/hermes-agent/venv, /opt/hermes/.venv
+    (kids container layout), ~/.hermes/hermes-agent/venv (host layout).
+    Returns None if none work. Never returns the current interpreter
+    (caller only calls this when the current interpreter lacks psycopg_pool).
+    """
+    candidates: list[Path] = []
+    venv = os.environ.get("VIRTUAL_ENV")
+    if venv:
+        candidates.append(Path(venv) / "bin" / "python")
+    hermes_home = os.environ.get("HERMES_HOME")
+    if hermes_home:
+        candidates.append(Path(hermes_home) / "hermes-agent" / "venv" / "bin" / "python")
+    candidates.extend([
+        Path("/opt/hermes/.venv/bin/python"),
+        Path.home() / ".hermes" / "hermes-agent" / "venv" / "bin" / "python",
+    ])
+    current = Path(sys.executable).resolve()
+    seen: set[Path] = set()
+    for p in candidates:
+        try:
+            resolved = p.resolve()
+        except OSError:
+            continue
+        if resolved in seen or resolved == current:
+            continue
+        seen.add(resolved)
+        if not p.exists():
+            continue
+        try:
+            r = subprocess.run(
+                [str(p), "-c", "import psycopg_pool"],
+                capture_output=True,
+                timeout=10,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        if r.returncode == 0:
+            return str(p)
+    return None
+
+
+def _guard_postgres_backend(backend: str) -> None:
+    """Refuse the two silent-data-loss paths before we touch the store.
+
+    1. DATABASE_URL set + ZEEMAP_STORE=local → the caller is bypassing
+       Postgres. Silent local writes never reach the viewer.
+    2. ZEEMAP_STORE=postgres + psycopg_pool unimportable in the current
+       interpreter → re-exec under a venv python that has it; if none
+       exists, exit loudly rather than let PostgresStore crash and
+       tempt the caller into ZEEMAP_STORE=local as a "fix".
+    """
+    if backend == "local" and os.environ.get("DATABASE_URL"):
+        print(
+            "error: DATABASE_URL is set but ZEEMAP_STORE=local — refusing "
+            "to silently bypass Postgres. If Postgres is erroring, surface "
+            "the real error to the user instead of forcing local mode. "
+            "To genuinely run in local mode, unset DATABASE_URL.",
+            file=sys.stderr,
+        )
+        sys.exit(6)
+    if backend != "postgres":
+        return
+    try:
+        import psycopg_pool  # noqa: F401
+        return
+    except ModuleNotFoundError:
+        pass
+    venv_py = _find_venv_python_with_psycopg_pool()
+    if venv_py:
+        script = str(Path(__file__).resolve())
+        os.execv(venv_py, [venv_py, script, *sys.argv[1:]])
+    print(
+        f"error: ZEEMAP_STORE=postgres requires psycopg_pool, but the "
+        f"current interpreter ({sys.executable}) does not have it and "
+        f"no hermes venv with it was found. Do NOT retry with "
+        f"ZEEMAP_STORE=local — that silently bypasses the database. "
+        f"Install psycopg_pool into this interpreter, or invoke "
+        f"write_zee.py via the hermes venv python directly.",
+        file=sys.stderr,
+    )
+    sys.exit(6)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -194,6 +283,8 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     backend = os.environ.get("ZEEMAP_STORE", "local").strip().lower()
+    # May os.execv under a venv python; if it does, we don't return here.
+    _guard_postgres_backend(backend)
     clerk_user = os.environ.get("CLERK_USER_ID", "").strip()
     if backend == "postgres" and not clerk_user:
         print("error: ZEEMAP_STORE=postgres requires CLERK_USER_ID env",

@@ -330,7 +330,32 @@ The `type` value must be one of:
 
 `0` success · `2` bad CLI input · `3` slug collision (retry with a
 slightly different title or wait a minute) · `4` zee persisted but
-event log append failed · `5` postgres mode without `CLERK_USER_ID` env.
+event log append failed · `5` postgres mode without `CLERK_USER_ID`
+env · `6` postgres required but unavailable (psycopg_pool missing
+from this interpreter and no hermes venv recoverable) OR
+`DATABASE_URL` is set but `ZEEMAP_STORE=local` was chosen. See the
+next section for why `6` exists.
+
+### Exit 6 — never "fix" it by forcing `ZEEMAP_STORE=local`
+
+If a write exits `6`, **do not retry the command with
+`ZEEMAP_STORE=local`**. That flag silently bypasses the database and
+the user never sees the zee in the viewer (this has happened and
+caused data loss). Exit `6` means one of:
+
+- `psycopg_pool` isn't importable in the interpreter running the
+  script. Fix by executing `write_zee.py` directly (`./write_zee.py
+  …`, which uses the venv shebang) or by invoking it via the hermes
+  venv python explicitly (`/home/dev/.hermes/hermes-agent/venv/bin/python
+  …` on the host, `/opt/hermes/.venv/bin/python …` in the kids
+  container). The script also tries to re-exec itself under a
+  discovered venv automatically — if it still exits `6`, no venv on
+  this box has `psycopg_pool`, and that's a setup error to surface
+  to the user.
+- `DATABASE_URL` is set but the caller passed `ZEEMAP_STORE=local`
+  as a command-line override. This guard exists specifically to
+  catch an agent silent-bypassing Postgres because of a transient
+  error. Surface the underlying error; do not work around this.
 
 ### Prose fields already quoted
 

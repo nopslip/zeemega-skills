@@ -15,9 +15,6 @@ CLERK_USER_ID env var to an internal UUID once via
 keeps Clerk out of the data layer entirely — swapping auth providers
 later is an ALTER TABLE on `users`, not a rewrite of every zee row.
 
-See /home/dev/hermes/zee-storage-migration-plan.md Phase 1 for the full
-refactor plan.
-
 Callers get a store via get_store(); both write_zee.py and zeemap-audit
 will route through this.
 """
