@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.2.0 — 2026-04-25
+
+New skill: read-side companion to `zeemap`.
+
+- `zeemap-fetch/` — `find_zees.py` CLI runs an ILIKE-ranked search
+  across title/zone/tags/body for the caller's `CLERK_USER_ID` (or
+  `HERMES_OWNER_ID`) and emits up to 5 candidates as JSON to stdout.
+  Returns `in_app_url` always, `public_url` only when the zee's
+  `visibility ∈ {unlisted, public}`. Mirrors `write_zee.py`'s exit-6
+  hermes-venv re-exec guard so silent fallback isn't possible.
+- Trigger phrases live in `zeemap-fetch/SKILL.md`. The skill explicitly
+  forbids auto-promoting visibility — visibility flips are user-driven
+  only, by design.
+- 7 unit tests + 1 opt-in integration test (skipped without
+  `DATABASE_URL` + `CLERK_USER_ID`).
+
 ## v0.1.1 — 2026-04-25
 
 Hardening release. No schema or behavior change for callers that do
