@@ -402,7 +402,26 @@ Postgres. If you need to sanity-check, re-run with `--dry-run` first
 on the same args and inspect the printed frontmatter + event block.
 
 Mention in chat that you saved a seed (with its zone) so the user can
-look at it in the viewer.
+look at it in the viewer. **Always include the viewer link** — construct
+it from the filename that `write_zee.py` printed, **stripping the `.md`
+suffix**:
+
+```
+https://app.zeemega.com/#/z/<id>
+```
+
+Example: if the script prints
+`2026-04-28-0301-the-alexander-technique-posture-awareness.md`, the link
+is
+`https://app.zeemega.com/#/z/2026-04-28-0301-the-alexander-technique-posture-awareness`
+— no `.md`, and note the `#/z/` hash route. The viewer reads the id from
+the URL fragment, not the path; a `/z/<...>` path link will 404 through
+to the SPA shell.
+
+Use `#/z/<id>` for private zees (the default). The `/p/<id>` route is
+for public/unlisted zees only (real path, server-rendered, also no
+`.md`) — never return that unless visibility was explicitly set to
+public or unlisted.
 
 ## Failure mode to watch for
 

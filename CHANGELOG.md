@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.3.0 — 2026-04-28
+
+New skill plus a private-link bug fix in `zeemap`.
+
+- `zeemega-intro/` — first-run guided experience for new Zeemega users.
+  Triggered only by explicit asks ("what is zeemega?", "intro me", "give
+  me the tour") — deliberately not by bare greetings. Walks the user
+  through one real research/decision/plan task using whatever tools fit
+  (web_search, structured analysis), then plants the result as their
+  first zee in zone `meta` with tags `intro,first-zee`. The whole skill
+  is the demo: people don't yet know what an agent does, and one rich
+  multi-step result around a topic they actually care about teaches
+  what words can't. No new scripts; reuses `zeemap/lib/write_zee.py`
+  for the canonical write so the meta zee lands in Postgres like any
+  other.
+- `zeemap/SKILL.md` — fixed the private-zee viewer link. The old
+  guidance produced `https://app.zeemega.com/z/<filename>.md` which
+  404s through to the SPA shell. New guidance produces
+  `https://app.zeemega.com/#/z/<id>` (hash route, no `.md`), matching
+  the viewer's `route.ts` source of truth (`HASH_PREFIX = '#/z/'`,
+  `zeeIdFor` strips `.md`). Public `/p/<id>` guidance unchanged. Found
+  after a user got a malformed link in chat.
+
 ## v0.2.0 — 2026-04-25
 
 New skill: read-side companion to `zeemap`.
