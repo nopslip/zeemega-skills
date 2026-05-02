@@ -1,5 +1,37 @@
 # Changelog
 
+## v0.4.0 — 2026-05-02
+
+Naming convention: every skill now uses the `zeemap-*` prefix; `zeemega`
+is reserved for the brand. Two new skills land; one is renamed.
+
+- **Renamed:** `zeemega-intro/` → `zeemap-intro/`. Skill behavior is
+  unchanged. Install contract changes from
+  `$HERMES_HOME/skills/productivity/zeemega-intro/` to
+  `$HERMES_HOME/skills/productivity/zeemap-intro/`. Anyone with the old
+  path baked into install scripts must update; the v0.4.0 sync step in
+  the release runbook moves the old user-local dir aside (renames to
+  `zeemega-intro.old.<date>`) so a missed reference fails loudly rather
+  than silently shadowing the new install.
+- **New:** `zeemap-muse/` — character query engine. Samples the user's
+  zee corpus via six graph algorithms (random walk, type constellation,
+  zone bridge, belief cluster, entropy slice, hybrid) to extract a
+  personality slice and surface new ideas, audio narration, or visual
+  fingerprints. Follows the established skill-as-tool pattern: emits a
+  synthesis prompt for the calling agent to feed to the LLM. Same code
+  as the prior `~/.hermes/skills/research/zeemega/` skill, repackaged
+  under the v0.4.0 naming convention.
+- **New:** `zeemap-grow/` — grow one zee into a leaf zee that builds on
+  it. Type-aware dispatch (`enrich` if metadata is thin; otherwise
+  `belief→counter`, `idea→concretize`; otherwise `expand`) selects a
+  prompt template; the calling agent feeds the rendered prompt to the
+  LLM, then shells out to `zeemap/lib/write_zee.py` with
+  `--seeded-from <parent-uuid>` to persist the leaf. v0.1 ships 4 of 7
+  planned modes; the rest fall back to `expand` until tuned. Adding a
+  future mode = drop a prompt template + add a row to `dispatch.yaml`.
+- **Repo flips PUBLIC** with this release. Prior versions were private;
+  the open-source surface starts at v0.4.0.
+
 ## v0.3.0 — 2026-04-28
 
 New skill plus a private-link bug fix in `zeemap`.
