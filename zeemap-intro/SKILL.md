@@ -1,5 +1,5 @@
 ---
-name: zeemega-intro
+name: zeemap-intro
 author: Zak
 description: First-run guided experience for new Zeemega users. Use ONLY when the user explicitly asks what Zeemega is or for a tour — phrases like "what is zeemega", "what is this", "intro me", "give me the tour", "show me what you do", "explain zeemega", "I'm new here, walk me through this", "onboard me", "teach me what you can do". Do NOT trigger on bare greetings ("hi", "hello", "yo"), generic acknowledgments ("thanks", "ok"), or any message where the user is already pursuing a specific task. If a more specific skill matches (zeemap to save a note, zeemap-fetch to find one) prefer that skill.
 version: 0.1.0
@@ -169,9 +169,9 @@ BODY_END
   --zone     meta \
   --tags     "intro,first-zee,<topic-tag>" \
   --what     "First zee — <their question, one line>." \
-  --why      "Planted during zeemega-intro tour as their first artifact." \
+  --why      "Planted during zeemap-intro tour as their first artifact." \
   --type     note \
-  --skill    zeemega-intro \
+  --skill    zeemap-intro \
   --model    <your model id, e.g. claude-opus-4-7>
 
 rm "$BODY"

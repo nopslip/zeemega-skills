@@ -1,0 +1,32 @@
+# Trigger -> mode dispatch table.
+# Editable without code changes. Each `mode` MUST have a matching
+# prompts/<mode>.md template.
+
+# Order matters: first match wins. enrich is checked before type
+# dispatch so a thin-metadata parent gets enriched even if its type
+# would otherwise route elsewhere.
+
+triggers:
+  - condition: metadata_thin   # what/why empty or contains "unclear"/"not yet articulated"/"tentative"/"tbd"
+    mode: enrich
+    leaf_type: same_as_parent
+  - condition: type_is_belief
+    mode: counter
+    leaf_type: note
+  - condition: type_is_idea
+    mode: concretize
+    leaf_type: idea
+  # v0.1: question/decision/research fall back to expand. Tune later.
+  - condition: always           # universal fallback
+    mode: expand
+    leaf_type: same_as_parent
+
+modes:
+  enrich:
+    template: prompts/enrich.md
+  counter:
+    template: prompts/counter.md
+  concretize:
+    template: prompts/concretize.md
+  expand:
+    template: prompts/expand.md

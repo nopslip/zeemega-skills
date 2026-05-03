@@ -11,7 +11,9 @@ alpha users) installs from here.
 | [`zeemap/`](./zeemap/) | Durable-note capture. Writes zees to the instance's data dir and to Postgres when `ZEEMAP_STORE=postgres`. |
 | [`zeemap-fetch/`](./zeemap-fetch/) | Read-side companion. ILIKE-ranked search across the caller's zees, returns up to 5 candidates as JSON with viewer URLs. |
 | [`zeemap-audit/`](./zeemap-audit/) | Tier-1 read-only auditor. Flags (never modifies) zees that fail schema or parse checks. Companion to `zeemap`; shares the v1 schema and log. |
-| [`zeemega-intro/`](./zeemega-intro/) | First-run guided experience for new users. Triggered by explicit asks ("what is zeemega?", "intro me"); walks them through one real task and plants the result as their first zee in zone `meta`. |
+| [`zeemap-intro/`](./zeemap-intro/) | First-run guided experience for new users. Triggered by explicit asks ("what is zeemega?", "intro me"); walks them through one real task and plants the result as their first zee in zone `meta`. (Renamed from `zeemega-intro` in v0.4.0.) |
+| [`zeemap-muse/`](./zeemap-muse/) | Character query engine. Samples the user's zee corpus via graph algorithms (random walk, type constellation, zone bridge, belief cluster, entropy slice) to surface new ideas, audio, or visuals from a personality slice. |
+| [`zeemap-grow/`](./zeemap-grow/) | Grow a single zee into a leaf zee. Type-aware dispatch: belief→counter, idea→concretize, missing-metadata→enrich; otherwise expand. Leaf is linked to parent via `seeded_from`. |
 
 ## Install contract
 
@@ -22,7 +24,9 @@ a Hermes instance:
 $HERMES_HOME/skills/productivity/zeemap/         ← contents of ./zeemap/
 $HERMES_HOME/skills/productivity/zeemap-fetch/   ← contents of ./zeemap-fetch/
 $HERMES_HOME/skills/productivity/zeemap-audit/   ← contents of ./zeemap-audit/
-$HERMES_HOME/skills/productivity/zeemega-intro/  ← contents of ./zeemega-intro/
+$HERMES_HOME/skills/productivity/zeemap-intro/   ← contents of ./zeemap-intro/
+$HERMES_HOME/skills/productivity/zeemap-muse/    ← contents of ./zeemap-muse/
+$HERMES_HOME/skills/productivity/zeemap-grow/    ← contents of ./zeemap-grow/
 ```
 
 `HERMES_HOME` defaults to `~/.hermes/` for host installs and `/opt/data/`
