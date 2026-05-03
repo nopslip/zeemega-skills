@@ -1,5 +1,48 @@
 # Changelog
 
+## v0.4.1 — 2026-05-03
+
+Hardening release. Decouple instance identity from Clerk by introducing
+`HERMES_OWNER_ID` (the internal `users.id` UUID) as the preferred env
+var, with `CLERK_USER_ID` retained as a deprecated fallback. Closes
+nopslip/zeemega-skills#4.
+
+- **`zeemap/lib/write_zee.py`**: prefer `HERMES_OWNER_ID`; pass it
+  through directly as `user_id` (no `resolve_user` round-trip per
+  write). Falls back to `CLERK_USER_ID` + `resolve_user` with a stderr
+  deprecation warning. Adds boundary validation: `HERMES_OWNER_ID` must
+  parse as a UUID; `CLERK_USER_ID` must NOT — catches the two operator
+  foot-guns where the values get pasted into the wrong var.
+- **`zeemap-grow/lib/reader.py`**: same precedence + validation rules.
+- **`zeemap-fetch/lib/find_zees.py`**: was already accepting either env
+  var name but treated both values as Clerk subjects (would `SELECT id
+  FROM users WHERE clerk_id = <uuid>` and fail). Now skips `_resolve_user_id`
+  when `HERMES_OWNER_ID` is set. Adds the same boundary validation.
+- **`zeemap/lib/store.py`** docstring: documents the preferred path
+  (caller already has the UUID) vs. legacy resolve_user fallback.
+- **SKILL.md updates**: `zeemap`, `zeemap-intro`, `zeemap-grow`,
+  `zeemap-fetch` now document `HERMES_OWNER_ID` as the required env var.
+- **Tests**: 6 new boundary-validation cases in `zeemap/tests/test_write_zee.py`
+  (covers exit-5 paths + a mock-store hot-path test that proves
+  `resolve_user` is not called when `HERMES_OWNER_ID` is set).
+  5 new cases in new `zeemap-grow/tests/test_reader.py`. 3 new
+  CLI-level cases in `zeemap-fetch/tests/test_find_zees.py`.
+
+Migration for existing instances (one-shot, post-release):
+
+```sql
+SELECT id FROM users WHERE clerk_id = '<current CLERK_USER_ID value>';
+```
+
+Append `HERMES_OWNER_ID=<that-uuid>` to the instance's `.env` and
+restart. `CLERK_USER_ID` can stay alongside during the transition;
+remove in a follow-up. The `provision/new-instance.sh` script in
+`nopslip/zeemega` is being updated in the same window to write
+`HERMES_OWNER_ID` directly for new instances.
+
+The `CLERK_USER_ID` fallback path will be removed in a future major
+release. New issue to track that follow-up will be filed.
+
 ## v0.4.0 — 2026-05-02
 
 Naming convention: every skill now uses the `zeemap-*` prefix; `zeemega`

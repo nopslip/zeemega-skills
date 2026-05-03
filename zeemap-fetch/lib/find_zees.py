@@ -4,14 +4,17 @@
 Usage:
   find_zees.py <query>
 
-Reads DATABASE_URL, CLERK_USER_ID, and (optional) ZEEMEGA_VIEWER_URL
-from the environment. Mirrors write_zee.py's exit-6 guard so silent
-fallback to a missing PG connection isn't possible.
+Reads DATABASE_URL, HERMES_OWNER_ID (preferred — internal users.id
+UUID, no DB round-trip) or legacy CLERK_USER_ID, and (optional)
+ZEEMEGA_VIEWER_URL from the environment. Mirrors write_zee.py's
+exit-6 guard so silent fallback to a missing PG connection isn't
+possible.
 
 Exit codes:
   0 success
   2 bad CLI input
-  5 CLERK_USER_ID not set
+  5 owner identity not set OR boundary validation failed
+    (HERMES_OWNER_ID must be a UUID; CLERK_USER_ID must not be one)
   6 psycopg_pool missing (no recoverable venv)
 """
 
@@ -22,6 +25,7 @@ import os
 import re
 import sys
 import urllib.parse
+import uuid as _uuid
 from pathlib import Path
 
 EXIT_BAD_INPUT = 2
@@ -181,11 +185,36 @@ def main() -> int:
         print("error: DATABASE_URL not set", file=sys.stderr)
         return EXIT_NO_USER  # treated as a config-missing error
 
-    clerk_user_id = (
-        os.environ.get("HERMES_OWNER_ID")
-        or os.environ.get("CLERK_USER_ID")
-    )
-    if not clerk_user_id:
+    owner_id = (os.environ.get("HERMES_OWNER_ID") or "").strip()
+    clerk_user_id = (os.environ.get("CLERK_USER_ID") or "").strip()
+
+    # Boundary validation. HERMES_OWNER_ID is the internal users.id UUID;
+    # CLERK_USER_ID is the auth-provider subject. Catch the two operator
+    # foot-guns where the values get swapped between vars.
+    if owner_id:
+        try:
+            _uuid.UUID(owner_id)
+        except ValueError:
+            print(
+                f"error: HERMES_OWNER_ID must be a UUID, got "
+                f"{owner_id!r}. (Did you mean to set CLERK_USER_ID?)",
+                file=sys.stderr,
+            )
+            return EXIT_NO_USER
+    if clerk_user_id:
+        try:
+            _uuid.UUID(clerk_user_id)
+            print(
+                f"error: CLERK_USER_ID looks like a UUID "
+                f"({clerk_user_id!r}). That's the internal owner id — "
+                f"set HERMES_OWNER_ID instead.",
+                file=sys.stderr,
+            )
+            return EXIT_NO_USER
+        except ValueError:
+            pass
+
+    if not (owner_id or clerk_user_id):
         print("error: HERMES_OWNER_ID or CLERK_USER_ID must be set", file=sys.stderr)
         return EXIT_NO_USER
 
@@ -193,7 +222,15 @@ def main() -> int:
 
     _ensure_psycopg_pool_available()
 
-    internal_user_id = _resolve_user_id(database_url, clerk_user_id)
+    if owner_id:
+        internal_user_id = owner_id
+    else:
+        print(
+            "warning: CLERK_USER_ID is deprecated; set HERMES_OWNER_ID "
+            "(internal UUID) directly to skip the per-call resolve.",
+            file=sys.stderr,
+        )
+        internal_user_id = _resolve_user_id(database_url, clerk_user_id)
     rows = search(database_url, internal_user_id, query)
     matches = [to_match(r, viewer_url) for r in rows]
     json.dump({"query": query, "matches": matches}, sys.stdout, indent=2)

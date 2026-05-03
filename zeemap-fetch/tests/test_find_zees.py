@@ -82,6 +82,49 @@ def test_cli_missing_query_exits_2():
     assert "usage" in r.stderr
 
 
+def _run_cli(env: dict, *args: str) -> subprocess.CompletedProcess:
+    """Invoke the CLI with a controlled env (no inherit). DATABASE_URL is
+    set to a non-empty placeholder so the script doesn't bail at the
+    DATABASE_URL check; we want to exercise the owner-id validation
+    layer that runs before any DB connection is attempted."""
+    return subprocess.run(
+        [sys.executable, str(REPO_ROOT / "lib" / "find_zees.py"), *args],
+        capture_output=True, text=True, env=env,
+    )
+
+
+def test_cli_invalid_hermes_owner_id_exits_5():
+    env = {
+        "PATH": os.environ.get("PATH", ""),
+        "DATABASE_URL": "postgresql://placeholder/none",
+        "HERMES_OWNER_ID": "user_3CowcZfslxmetPVhIXDwX8uqaNu",  # Clerk subject, not a UUID
+    }
+    r = _run_cli(env, "zee")
+    assert r.returncode == 5, r.stderr
+    assert "must be a UUID" in r.stderr
+
+
+def test_cli_clerk_user_id_that_is_a_uuid_exits_5():
+    env = {
+        "PATH": os.environ.get("PATH", ""),
+        "DATABASE_URL": "postgresql://placeholder/none",
+        "CLERK_USER_ID": "393b9f12-3d18-49e7-9215-b5704af79b79",
+    }
+    r = _run_cli(env, "zee")
+    assert r.returncode == 5, r.stderr
+    assert "looks like a UUID" in r.stderr
+
+
+def test_cli_neither_owner_var_set_exits_5():
+    env = {
+        "PATH": os.environ.get("PATH", ""),
+        "DATABASE_URL": "postgresql://placeholder/none",
+    }
+    r = _run_cli(env, "zee")
+    assert r.returncode == 5, r.stderr
+    assert "HERMES_OWNER_ID or CLERK_USER_ID" in r.stderr
+
+
 @pytest.mark.skipif(
     not os.environ.get("DATABASE_URL") or not os.environ.get("CLERK_USER_ID"),
     reason="integration test needs DATABASE_URL + CLERK_USER_ID",

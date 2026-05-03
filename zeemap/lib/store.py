@@ -9,11 +9,17 @@ Two implementations:
   ZEEMAP_STORE=postgres. Requires DATABASE_URL. Threads user_id through.
 
 `user_id` in this module is the INTERNAL users.id UUID, not the Clerk
-subject. Callers (write_zee, migrate_to_postgres, audit) convert their
-CLERK_USER_ID env var to an internal UUID once via
-`store.resolve_user(clerk_id)` at startup and cache the result. That
-keeps Clerk out of the data layer entirely — swapping auth providers
-later is an ALTER TABLE on `users`, not a rewrite of every zee row.
+subject. Preferred caller path: read `HERMES_OWNER_ID` from env (it
+already IS the internal UUID — set once during instance provisioning
+via UPSERT-RETURNING against the users table) and pass it through.
+That keeps Clerk out of the data layer entirely — swapping auth
+providers later is an ALTER TABLE on `users`, not a rewrite of every
+zee row.
+
+Legacy fallback: callers that only have `CLERK_USER_ID` set go through
+`store.resolve_user(clerk_id)` to upsert a users row and get the UUID
+back. This path is deprecated; resolve once during provisioning and
+write the UUID into `HERMES_OWNER_ID` instead.
 
 Callers get a store via get_store(); both write_zee.py and zeemap-audit
 will route through this.

@@ -85,14 +85,18 @@ deliberately keeps visibility flips out of agent control.
 
 The script reads:
 - `DATABASE_URL` — required for connecting to Postgres
-- `CLERK_USER_ID` (or future `HERMES_OWNER_ID`) — required for owner scope
+- `HERMES_OWNER_ID` — preferred; the internal `users.id` UUID. Set
+  once during instance provisioning, no DB round-trip per call.
+- `CLERK_USER_ID` — legacy fallback (Clerk subject, e.g.
+  `user_3CowcZ…`); resolved to a UUID on every call. Deprecated.
 - `ZEEMEGA_VIEWER_URL` — optional, defaults to `https://app.zeemega.com`
 
 ## Exit codes
 
 - `0` success; JSON written to stdout
 - `2` bad CLI input (missing query)
-- `5` `CLERK_USER_ID` env not set
+- `5` owner identity missing OR boundary validation failed
+  (`HERMES_OWNER_ID` must be a UUID; `CLERK_USER_ID` must not be one)
 - `6` `psycopg_pool` unavailable in current interpreter (mirrors `write_zee.py`)
 
 ## Pitfalls

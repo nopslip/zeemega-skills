@@ -33,13 +33,37 @@ def _looks_like_uuid(s: str) -> bool:
 
 
 def _resolve_user_id() -> str:
-    clerk_id = os.environ.get("CLERK_USER_ID")
-    if not clerk_id:
-        raise RuntimeError(
-            "CLERK_USER_ID not set; zeemap-grow needs it to read your zees"
+    """Return the internal users.id UUID for this caller.
+
+    Prefers HERMES_OWNER_ID (already the UUID — no DB round-trip).
+    Falls back to legacy CLERK_USER_ID + resolve_user.
+    """
+    owner_id = (os.environ.get("HERMES_OWNER_ID") or "").strip()
+    clerk_id = (os.environ.get("CLERK_USER_ID") or "").strip()
+    if owner_id:
+        if not _looks_like_uuid(owner_id):
+            raise RuntimeError(
+                f"HERMES_OWNER_ID must be a UUID, got {owner_id!r}. "
+                f"(Did you mean to set CLERK_USER_ID?)"
+            )
+        return owner_id
+    if clerk_id:
+        if _looks_like_uuid(clerk_id):
+            raise RuntimeError(
+                f"CLERK_USER_ID looks like a UUID ({clerk_id!r}). "
+                f"That's the internal owner id — set HERMES_OWNER_ID instead."
+            )
+        print(
+            "warning: CLERK_USER_ID is deprecated; set HERMES_OWNER_ID "
+            "(internal UUID) directly to skip the per-call resolve.",
+            file=sys.stderr,
         )
-    s = store.get_store()
-    return s.resolve_user(clerk_id)
+        s = store.get_store()
+        return s.resolve_user(clerk_id)
+    raise RuntimeError(
+        "HERMES_OWNER_ID (or legacy CLERK_USER_ID) not set; "
+        "zeemap-grow needs it to read your zees"
+    )
 
 
 def get_parent(identifier: str) -> dict:

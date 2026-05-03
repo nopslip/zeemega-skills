@@ -4,7 +4,7 @@ author: Zak
 description: Grow a single zee into a leaf zee that builds on it — counter, concretize, expand, or enrich missing metadata, dispatched by parent state. Use when the user says "grow this zee", "develop this", "what's next from <zee>", or "evolve <id>". The leaf is a NEW zee linked to the parent via seeded_from; the parent is never modified.
 version: 0.1.0
 platforms: [linux]
-required_environment_variables: [ZEEMAP_STORE, DATABASE_URL, CLERK_USER_ID]
+required_environment_variables: [ZEEMAP_STORE, DATABASE_URL, HERMES_OWNER_ID]
 metadata:
   hermes:
     tags: [zeemap, grow, leaf, seeded-from, gardening, derivative]

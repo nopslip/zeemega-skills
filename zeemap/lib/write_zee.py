@@ -12,7 +12,9 @@ Exit codes:
   2 — missing required CLI arg or bad input
   3 — slug collision (caller should retry with disambiguator)
   4 — log/event append failed (zee itself persisted; audit will see it)
-  5 — postgres mode requires CLERK_USER_ID env and it isn't set
+  5 — postgres mode requires HERMES_OWNER_ID (or legacy CLERK_USER_ID)
+      and it isn't set, OR the value fails boundary validation
+      (HERMES_OWNER_ID must be a UUID; CLERK_USER_ID must not be one)
   6 — postgres required but unavailable (psycopg_pool missing and no
       venv recoverable), OR DATABASE_URL set but ZEEMAP_STORE=local
       (agent silent-fallback guard). Do NOT retry with
@@ -285,10 +287,43 @@ def main(argv: list[str] | None = None) -> int:
     backend = os.environ.get("ZEEMAP_STORE", "local").strip().lower()
     # May os.execv under a venv python; if it does, we don't return here.
     _guard_postgres_backend(backend)
+
+    owner_id_env = os.environ.get("HERMES_OWNER_ID", "").strip()
     clerk_user = os.environ.get("CLERK_USER_ID", "").strip()
-    if backend == "postgres" and not clerk_user:
-        print("error: ZEEMAP_STORE=postgres requires CLERK_USER_ID env",
-              file=sys.stderr)
+
+    # Boundary validation. HERMES_OWNER_ID is the internal users.id UUID;
+    # CLERK_USER_ID is the auth-provider subject (e.g. user_3CowcZ...).
+    # Catch the two foot-gun mistakes operators make hand-editing .env:
+    # pasting a Clerk subject into HERMES_OWNER_ID, or a UUID into
+    # CLERK_USER_ID. Without these, the FK constraint catches it
+    # eventually, but the diagnostic is much worse.
+    if owner_id_env:
+        try:
+            uuid_mod.UUID(owner_id_env)
+        except ValueError:
+            print(
+                f"error: HERMES_OWNER_ID must be a UUID, got "
+                f"{owner_id_env!r}. (Did you mean to set CLERK_USER_ID?)",
+                file=sys.stderr,
+            )
+            return 5
+    if clerk_user:
+        try:
+            uuid_mod.UUID(clerk_user)
+            print(
+                f"error: CLERK_USER_ID looks like a UUID ({clerk_user!r}). "
+                f"That's the internal owner id — set HERMES_OWNER_ID "
+                f"instead. CLERK_USER_ID must be the Clerk subject "
+                f"(e.g. 'user_3CowcZ...').",
+                file=sys.stderr,
+            )
+            return 5
+        except ValueError:
+            pass
+
+    if backend == "postgres" and not (owner_id_env or clerk_user):
+        print("error: ZEEMAP_STORE=postgres requires HERMES_OWNER_ID "
+              "(or legacy CLERK_USER_ID) env", file=sys.stderr)
         return 5
 
     # Construct the store directly (not via get_store()) so --data-dir /
@@ -304,8 +339,19 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: unknown ZEEMAP_STORE={backend!r}", file=sys.stderr)
         return 2
     # Local mode: user_id is a no-op (see LocalMarkdownStore). Postgres
-    # mode: resolve Clerk subject → internal users.id UUID.
-    user_id = store.resolve_user(clerk_user) if clerk_user else ""
+    # mode: prefer HERMES_OWNER_ID (already the internal UUID — no DB
+    # round-trip), fall back to legacy CLERK_USER_ID + resolve_user().
+    if owner_id_env:
+        user_id = owner_id_env
+    elif clerk_user:
+        print(
+            "warning: CLERK_USER_ID is deprecated; set HERMES_OWNER_ID "
+            "(internal UUID) directly to skip the per-write resolve.",
+            file=sys.stderr,
+        )
+        user_id = store.resolve_user(clerk_user)
+    else:
+        user_id = ""
 
     zee = Zee(
         uuid=zee_uuid,

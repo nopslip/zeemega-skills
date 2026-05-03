@@ -299,5 +299,181 @@ class TestInvocationContract(unittest.TestCase):
         )
 
 
+class TestOwnerIdEnvVars(unittest.TestCase):
+    """Boundary validation for HERMES_OWNER_ID / CLERK_USER_ID.
+
+    Postgres-mode is exercised here only at the env-validation layer —
+    the script bails with exit 5 BEFORE constructing PostgresStore, so
+    these tests don't need a live DB. The full PG round-trip is covered
+    by the (opt-in) integration tests in zeemap-fetch.
+    """
+
+    def setUp(self):
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.body_path = Path(self.tmpdir.name) / "body.md"
+        self.body_path.write_text("body\n")
+        self.data_dir = Path(self.tmpdir.name) / "data"
+        self.log_path = Path(self.tmpdir.name) / "log.jsonl"
+        # Capture and restore the three env vars we touch.
+        self._saved = {
+            k: os.environ.get(k)
+            for k in ("ZEEMAP_STORE", "HERMES_OWNER_ID", "CLERK_USER_ID")
+        }
+        for k in ("ZEEMAP_STORE", "HERMES_OWNER_ID", "CLERK_USER_ID"):
+            os.environ.pop(k, None)
+
+    def tearDown(self):
+        for k, v in self._saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+        self.tmpdir.cleanup()
+
+    def _argv(self) -> list[str]:
+        return [
+            "--title", "Owner id env test",
+            "--body-file", str(self.body_path),
+            "--zone", "tools",
+            "--tags", "test",
+            "--what", "what",
+            "--why", "why",
+            "--type", "note",
+            "--data-dir", str(self.data_dir),
+            "--log-path", str(self.log_path),
+        ]
+
+    def test_postgres_mode_without_owner_id_or_clerk_id_exits_5(self):
+        os.environ["ZEEMAP_STORE"] = "postgres"
+        code, _, err = _run(self._argv())
+        self.assertEqual(code, 5)
+        self.assertIn("HERMES_OWNER_ID", err)
+
+    def test_invalid_hermes_owner_id_exits_5(self):
+        os.environ["ZEEMAP_STORE"] = "postgres"
+        os.environ["HERMES_OWNER_ID"] = "user_3CowcZfslxmetPVhIXDwX8uqaNu"
+        code, _, err = _run(self._argv())
+        self.assertEqual(code, 5)
+        self.assertIn("must be a UUID", err)
+        self.assertIn("CLERK_USER_ID", err)
+
+    def test_clerk_user_id_that_is_a_uuid_exits_5(self):
+        os.environ["ZEEMAP_STORE"] = "postgres"
+        os.environ["CLERK_USER_ID"] = "393b9f12-3d18-49e7-9215-b5704af79b79"
+        code, _, err = _run(self._argv())
+        self.assertEqual(code, 5)
+        self.assertIn("looks like a UUID", err)
+        self.assertIn("HERMES_OWNER_ID", err)
+
+    def test_local_mode_ignores_owner_id_validation(self):
+        """Local mode never touches user_id, so even garbage in the env
+        vars shouldn't block writes — but format guards still fire because
+        they're cheap and catch operator typos before the .env propagates
+        to a postgres-mode process."""
+        os.environ["ZEEMAP_STORE"] = "local"
+        os.environ["HERMES_OWNER_ID"] = "not-a-uuid"
+        code, _, err = _run(self._argv())
+        self.assertEqual(code, 5, err)
+        self.assertIn("must be a UUID", err)
+
+
+class TestOwnerIdHotPath(unittest.TestCase):
+    """When HERMES_OWNER_ID is set, store.resolve_user must NOT be called.
+
+    This is the core perf/decoupling claim of the rename. We verify it
+    by stubbing out PostgresStore so resolve_user blows up if invoked.
+    """
+
+    def setUp(self):
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.body_path = Path(self.tmpdir.name) / "body.md"
+        self.body_path.write_text("body\n")
+        self._saved = {
+            k: os.environ.get(k)
+            for k in ("ZEEMAP_STORE", "HERMES_OWNER_ID", "CLERK_USER_ID")
+        }
+        for k in ("ZEEMAP_STORE", "HERMES_OWNER_ID", "CLERK_USER_ID"):
+            os.environ.pop(k, None)
+
+    def tearDown(self):
+        for k, v in self._saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+        self.tmpdir.cleanup()
+
+    def test_hermes_owner_id_skips_resolve_user(self):
+        import unittest.mock as mock
+        os.environ["ZEEMAP_STORE"] = "postgres"
+        owner_uuid = "393b9f12-3d18-49e7-9215-b5704af79b79"
+        os.environ["HERMES_OWNER_ID"] = owner_uuid
+
+        captured = {}
+
+        class FakeStore:
+            def resolve_user(self, *args, **kwargs):
+                raise AssertionError(
+                    "resolve_user must NOT be called when "
+                    "HERMES_OWNER_ID is set"
+                )
+
+            def put(self, zee):
+                captured["user_id"] = zee.user_id
+                return zee.uuid
+
+            def append_event(self, *args, **kwargs):
+                pass
+
+        with mock.patch("lib.store.PostgresStore", FakeStore):
+            code, _, err = _run([
+                "--title", "Hot path test",
+                "--body-file", str(self.body_path),
+                "--zone", "tools",
+                "--tags", "test",
+                "--what", "what",
+                "--why", "why",
+                "--type", "note",
+            ])
+        self.assertEqual(code, 0, err)
+        self.assertEqual(captured["user_id"], owner_uuid)
+
+    def test_clerk_fallback_calls_resolve_user_with_warning(self):
+        import unittest.mock as mock
+        os.environ["ZEEMAP_STORE"] = "postgres"
+        os.environ["CLERK_USER_ID"] = "user_3CowcZfslxmetPVhIXDwX8uqaNu"
+        resolved_uuid = "393b9f12-3d18-49e7-9215-b5704af79b79"
+
+        captured = {}
+
+        class FakeStore:
+            def resolve_user(self, clerk_id, email=None):
+                captured["resolved_clerk"] = clerk_id
+                return resolved_uuid
+
+            def put(self, zee):
+                captured["user_id"] = zee.user_id
+                return zee.uuid
+
+            def append_event(self, *args, **kwargs):
+                pass
+
+        with mock.patch("lib.store.PostgresStore", FakeStore):
+            code, _, err = _run([
+                "--title", "Fallback test",
+                "--body-file", str(self.body_path),
+                "--zone", "tools",
+                "--tags", "test",
+                "--what", "what",
+                "--why", "why",
+                "--type", "note",
+            ])
+        self.assertEqual(code, 0, err)
+        self.assertEqual(captured["resolved_clerk"],
+                         "user_3CowcZfslxmetPVhIXDwX8uqaNu")
+        self.assertEqual(captured["user_id"], resolved_uuid)
+        self.assertIn("CLERK_USER_ID is deprecated", err)
+
+
 if __name__ == "__main__":
     unittest.main()

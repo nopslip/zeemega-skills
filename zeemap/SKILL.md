@@ -330,7 +330,9 @@ The `type` value must be one of:
 
 `0` success · `2` bad CLI input · `3` slug collision (retry with a
 slightly different title or wait a minute) · `4` zee persisted but
-event log append failed · `5` postgres mode without `CLERK_USER_ID`
+event log append failed · `5` postgres mode without `HERMES_OWNER_ID`
+(or legacy `CLERK_USER_ID`), or one of those vars failed boundary
+validation (`HERMES_OWNER_ID` must be a UUID; `CLERK_USER_ID` must not be one)
 env · `6` postgres required but unavailable (psycopg_pool missing
 from this interpreter and no hermes venv recoverable) OR
 `DATABASE_URL` is set but `ZEEMAP_STORE=local` was chosen. See the
